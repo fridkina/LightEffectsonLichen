@@ -1,0 +1,147 @@
+---
+title: "Lichen Data Analysis"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+lichendata<-read_csv("Lichen Data - Sheet1.csv")
+```
+
+```{r Data Wrangling}
+lichenclean<-lichendata%>%
+  rename("lichenpresence"="Lichen presence","speciesnum"="number lichen species","north"="light N (umols)","east"="light E", "south"="light S","west"="light W","percentcoverage"="Percentage of Tree covered by lichen", "yellow_north"="Yellow Lichen North", "yellow_south"="Yellow Lichen South","yellow_total"="Yellow lichen total","green_south"="Green Lichen South","green_north"="Green Lichen North","green_total"="Green Lichen Total","gray_south"="Gray Lichen South Side","gray_north"="Gray Lichen North Side...18","gray_total"="Gray Lichen Total...19","total_south"="Lichen on South Total...24","total_north"="Lichen on North Total...25","north_coverage"="North percent coverage","south_coverage"="South Percent coverage","bottom"="Lichen on South Total...20","top"="Gray Lichen Total...23","tree"="f")%>%
+  select(!bottom:top)
+
+lichen_long<-lichenclean%>%
+  pivot_longer(yellow_south:total_north,names_to=c("species","lichen_dir"),values_to="lichen_cov",names_sep = "_")%>%
+  mutate("lichen_covprop"=lichen_cov/(circumference/2))
+
+light_long<-lichenclean%>%
+  pivot_longer(north:west,names_to = "light_dir",values_to = "light_cov")
+```
+
+```{r tests for light on trees as whole}
+#total light coverage w total lichen coverage --> no signifcant correlation, p>0.05 but 0.11
+light_perc<-light_long%>%
+  group_by(tree)%>%
+  mutate("total_light"=sum(light_cov))%>%
+  summarize(total_light,percentcoverage)
+cor.test(light_perc$total_light,light_perc$percentcoverage)
+
+#total light vs lichen for each species 
+light_spec<-lichen_long%>%
+  group_by(tree)%>%
+  filter(lichen_dir=="total")%>%
+  summarize("total_light"=sum(north,east,south,west),species,lichen_covprop)
+
+#green not significant, p>0.05
+green<-light_spec%>%
+  filter(species=="green")
+cor.test(green$lichen_covprop,green$total_light)
+
+#yellow not significant p>0.05
+yellow<-light_spec%>%
+  filter(species=="yellow")
+cor.test(yellow$lichen_covprop,yellow$total_light)
+
+#grey not significant p>0.05
+gray<-light_spec%>%
+  filter(species=="gray")
+cor.test(gray$lichen_covprop,gray$total_light)
+
+#total light vs lichen diversity - significant at the p<0.05 level, there is a positive correlation between total light levels and total number of species of lichen 
+light_div<-light_long%>%
+  group_by(tree)%>%
+  summarize("total_light"=sum(light_cov),speciesnum=mean(speciesnum))
+cor.test(light_div$speciesnum,light_div$total_light)
+```
+
+
+```{r tests based on quadrants}
+#light on north and south - significant difference p-value <0.001 
+t.test(lichenclean$north,lichenclean$south, paired=TRUE)
+
+#lichen on north and south - not significant, p-value>0.05 
+t.test(lichenclean$north_coverage,lichenclean$south_coverage,paired=TRUE)
+
+#lichen on north and south for green- not significant, p-value >0.05
+green_south<-lichen_long%>%
+  filter(species=="green",lichen_dir=="south")
+green_north<-lichen_long%>%
+  filter(species=="green",lichen_dir=="north")
+t.test(green_south$lichen_covprop,green_north$lichen_covprop,paired=TRUE)
+
+#for yellow - not significant p>0.05
+yellow_south<-lichen_long%>%
+  filter(species=="yellow",lichen_dir=="south")
+yellow_north<-lichen_long%>%
+  filter(species=="yellow",lichen_dir=="north")
+t.test(yellow_south$lichen_covprop,yellow_north$lichen_covprop,paired=TRUE)
+
+
+#for grey - signficant at the p<0.05, true difference is > 0 (more on south than north)
+gray_south<-lichen_long%>%
+  filter(species=="gray",lichen_dir=="south")
+gray_north<-lichen_long%>%
+  filter(species=="gray",lichen_dir=="north")
+t.test(gray_south$lichen_covprop,gray_north$lichen_covprop,paired=TRUE)
+
+#for differences in diversity - not significant, p>0.05
+div<-lichen_long%>%
+  mutate("lichen_pres"=factor(ifelse(lichen_cov>0, "1", "0")))
+
+div_north<-div%>% #getting species diversity for north side
+  filter(lichen_dir=="north")%>%
+  filter(species!="total")%>%
+  select(tree,lichen_pres)%>%
+  mutate("lichen_pres"=as.numeric(lichen_pres)-1)%>%
+  group_by(tree)%>%
+  summarize("diversity"=sum(lichen_pres))
+
+div_south<-div%>% #getting species diversity for south side
+  filter(lichen_dir=="south")%>%
+  filter(species!="total")%>%
+  select(tree,lichen_pres)%>%
+  mutate("lichen_pres"=as.numeric(lichen_pres)-1)%>%
+  group_by(tree)%>%
+  summarize("diversity"=sum(lichen_pres))
+
+t.test(div_north$diversity,div_south$diversity,paired=TRUE)
+```
+
+```{r figure 2 (correlation between lichen diversity and total light coverage)}
+ggplot(light_div,aes(x=speciesnum,y=total_light))+
+  geom_point()+
+  geom_smooth(method="lm",se=FALSE)+
+  labs(title="Lichen Diversity Increases with Light Levels",subtitle="cor=0.4345, p<0.05",y="Total Recorded Light",x = "Number of Species")
+```
+
+```{r figure 3 (difference between light on north and south sides)}
+light_long_fig<-light_long%>%
+  filter(light_dir=="north"|light_dir=="south")
+ggplot(light_long_fig)+
+  geom_boxplot(aes(x=light_dir,y=light_cov))+
+  labs(x="Direction",y="Recorded Light Levels (umols)",title="Difference in Light Levels on North and South Sides of Trees",subtitle="paired t-test, mean of differences = 79.517, p<0.001")
+```
+
+```{r figure 4 (difference between coverage on north and south sides for grey lichen)}
+gray_south<-gray_south%>%
+  select(tree,lichen_covprop)%>%
+  mutate("south"=lichen_covprop)%>%
+  select(tree,south)
+gray_north<-gray_north%>%
+  select(tree,lichen_covprop)%>%
+  mutate("north"=lichen_covprop)%>%
+  select(tree,north)
+gray_coverage<-left_join(gray_south,gray_north,by="tree")%>%
+  pivot_longer(south:north,names_to="direction",values_to = "coverage_prop")
+
+ggplot(gray_coverage)+
+  geom_boxplot(aes(x=direction,y=coverage_prop))+
+  labs(title="Difference in Gray Lichen Coverage on North and South Sides of Trees",subtitle="Paired t-test, mean of differences = 0.0572, p<0.05", x = "Direction", y= "Proportion of Circumference with Gray Lichen Presence")
+```
+
+
+
