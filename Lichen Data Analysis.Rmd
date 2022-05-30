@@ -1,15 +1,14 @@
 ---
 title: "Lichen Data Analysis"
-output: md_document
+output: html_document
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 lichendata<-read_csv("Lichen Data - Sheet1.csv")
 ```
 
-```{r Data Wrangling}
+```{r Data Wrangling, include = FALSE}
 lichenclean<-lichendata%>%
   rename("lichenpresence"="Lichen presence","speciesnum"="number lichen species","north"="light N (umols)","east"="light E", "south"="light S","west"="light W","percentcoverage"="Percentage of Tree covered by lichen", "yellow_north"="Yellow Lichen North", "yellow_south"="Yellow Lichen South","yellow_total"="Yellow lichen total","green_south"="Green Lichen South","green_north"="Green Lichen North","green_total"="Green Lichen Total","gray_south"="Gray Lichen South Side","gray_north"="Gray Lichen North Side...18","gray_total"="Gray Lichen Total...19","total_south"="Lichen on South Total...24","total_north"="Lichen on North Total...25","north_coverage"="North percent coverage","south_coverage"="South Percent coverage","bottom"="Lichen on South Total...20","top"="Gray Lichen Total...23","tree"="f")%>%
   select(!bottom:top)
@@ -21,6 +20,8 @@ lichen_long<-lichenclean%>%
 light_long<-lichenclean%>%
   pivot_longer(north:west,names_to = "light_dir",values_to = "light_cov")
 ```
+
+## Tests for average light on each tree as a whole
 
 ```{r tests for light on trees as whole}
 #total light coverage w total lichen coverage --> no signifcant correlation, p>0.05 but 0.11
@@ -58,6 +59,7 @@ light_div<-light_long%>%
 cor.test(light_div$speciesnum,light_div$total_light)
 ```
 
+## Tests based on tree quadrants 
 
 ```{r tests based on quadrants}
 #light on north and south - significant difference p-value <0.001 
@@ -111,12 +113,18 @@ div_south<-div%>% #getting species diversity for south side
 t.test(div_north$diversity,div_south$diversity,paired=TRUE)
 ```
 
+## Figures for significant results 
+
+# Figure 2
+
 ```{r figure 2 (correlation between lichen diversity and total light coverage)}
 ggplot(light_div,aes(x=speciesnum,y=total_light))+
   geom_point()+
   geom_smooth(method="lm",se=FALSE)+
   labs(title="Lichen Diversity Increases with Light Levels",subtitle="cor=0.4345, p<0.05",y="Total Recorded Light",x = "Number of Species")
 ```
+
+# Figure 3
 
 ```{r figure 3 (difference between light on north and south sides)}
 light_long_fig<-light_long%>%
@@ -125,6 +133,8 @@ ggplot(light_long_fig)+
   geom_boxplot(aes(x=light_dir,y=light_cov))+
   labs(x="Direction",y="Recorded Light Levels (umols)",title="Difference in Light Levels on North and South Sides of Trees",subtitle="paired t-test, mean of differences = 79.517, p<0.001")
 ```
+
+# Figure 4
 
 ```{r figure 4 (difference between coverage on north and south sides for grey lichen)}
 gray_south<-gray_south%>%
